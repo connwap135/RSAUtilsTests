@@ -82,15 +82,20 @@ namespace RSAUtilsTests
         {
             try
             {
+                Console.WriteLine("开始解密...");
+
                 // 从Base64字符串加载私钥
                 AsymmetricKeyParameter privateKeyParam = GetPrivateKeyFromBase64(privateKey);
+                Console.WriteLine("私钥加载成功");
 
                 // 将加密数据转换为字节数组
                 byte[] encryptedBytes = Convert.FromBase64String(encryptedData);
+                Console.WriteLine($"加密数据长度: {encryptedBytes.Length}");
 
                 // 使用BouncyCastle提供的解密引擎
                 var cipher = CipherUtilities.GetCipher("RSA/ECB/PKCS1Padding");
                 cipher.Init(false, privateKeyParam);
+                Console.WriteLine("解密引擎初始化成功");
 
                 // 分段解密处理
                 using (var outputStream = new MemoryStream())
@@ -103,27 +108,38 @@ namespace RSAUtilsTests
                     // 对数据分段解密
                     while (dataLength - offSet > 0)
                     {
-                        if (dataLength - offSet > MAX_DECRYPT_BLOCK)
+                        try
                         {
-                            cache = cipher.DoFinal(encryptedBytes, offSet, MAX_DECRYPT_BLOCK);
+                            if (dataLength - offSet > MAX_DECRYPT_BLOCK)
+                            {
+                                cache = cipher.DoFinal(encryptedBytes, offSet, MAX_DECRYPT_BLOCK);
+                            }
+                            else
+                            {
+                                cache = cipher.DoFinal(encryptedBytes, offSet, dataLength - offSet);
+                            }
+                            outputStream.Write(cache, 0, cache.Length);
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            cache = cipher.DoFinal(encryptedBytes, offSet, dataLength - offSet);
+                            Console.WriteLine($"解密块失败：{ex.Message}");
+                            Console.WriteLine($"解密块偏移量: {offSet}");
+                            return null; // 处理解密块失败的情况
                         }
-                        outputStream.Write(cache, 0, cache.Length);
                         i++;
                         offSet = i * MAX_DECRYPT_BLOCK;
                     }
 
                     // URL解码，与Java保持一致
                     string outStr = Encoding.UTF8.GetString(outputStream.ToArray());
+                    Console.WriteLine("解密成功");
                     return HttpUtility.UrlDecode(outStr, Encoding.GetEncoding(CHARSET));
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"解密失败：{ex.Message}");
+                Console.WriteLine(ex.StackTrace);
                 return null;
             }
         }

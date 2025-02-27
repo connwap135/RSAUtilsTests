@@ -15,49 +15,23 @@ try
 {
     // GET请求参数测试
     var originalGetParams = "departNos=BM0001&containsDeletedPerson=true&beginDate=2024-08-01&endDate=2024-08-15";
+    
+    Console.WriteLine("1. 测试加密功能:");
+    var encryptedGet = RSAUtils.EncryptByPrivateKey(originalGetParams, privateKey);
+    Console.WriteLine($"加密结果: {encryptedGet}");
+    Console.WriteLine($"与预期结果一致: {encryptedGet == expectedResult}");
+    
+    // 测试不同的解密方法
+    Console.WriteLine("\n2. 测试解密功能:");
+   var d= RSAUtils.DecryptByPrivateKey(encryptedGet, privateKey);
+    Console.WriteLine($"解密结果: {d}");
 
-    
-    Console.WriteLine("2. 使用JavaCompat实现测试:");
-    var javaCompatResult = RSAUtils.EncryptByPrivateKey(originalGetParams, privateKey);
-    Console.WriteLine($"加密结果: {javaCompatResult}");
-    Console.WriteLine($"与预期结果一致: {javaCompatResult == expectedResult}");
-    
-    // 如果结果不一致，显示差异
-    if (javaCompatResult != expectedResult)
-    {
-        Console.WriteLine("\n比较差异:");
-        Console.WriteLine($"期望结果长度: {expectedResult.Length}, 实际结果长度: {javaCompatResult.Length}");
-        
-        // 尝试转换为字节数组对比
-        byte[] expectedBytes = Convert.FromBase64String(expectedResult);
-        byte[] actualBytes = Convert.FromBase64String(javaCompatResult);
-        
-        Console.WriteLine($"期望结果字节数: {expectedBytes.Length}, 实际结果字节数: {actualBytes.Length}");
-        
-        if (expectedBytes.Length == actualBytes.Length)
-        {
-            int diffCount = 0;
-            for (int i = 0; i < expectedBytes.Length; i++)
-            {
-                if (expectedBytes[i] != actualBytes[i])
-                {
-                    diffCount++;
-                    if (diffCount <= 5)
-                    {
-                        Console.WriteLine($"字节差异位置 {i}: 期望 {expectedBytes[i]}, 实际 {actualBytes[i]}");
-                    }
-                }
-            }
-            Console.WriteLine($"总共有 {diffCount} 个字节不同");
-        }
-    }
 
     // POST请求参数测试
+    Console.WriteLine("\n4. POST 请求参数加密测试:");
     var originalPostParams = "{\"holidayType\":\"测试请假类型\",\"holidayUnit\":1,\"hourForDay\":8,\"holidayRule\":1,\"durationCalculateType\":0}";
     var encryptedPost = RSAUtils.EncryptByPrivateKey(originalPostParams, privateKey);
-    
-    Console.WriteLine("\n3. POST 请求参数加密结果:");
-    Console.WriteLine(encryptedPost);
+    Console.WriteLine($"加密结果: {encryptedPost}");
 }
 catch (Exception ex)
 {
