@@ -1,157 +1,131 @@
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Security;
+using System;
+using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Web;
 
 namespace RSAUtilsTests
 {
     /// <summary>
-    /// 完全模拟Java的RSA加密实现
+    /// RSA加解密工具类
     /// </summary>
-    public static class RSAUtils
+    public class RSAUtils
     {
+        private const string RSA_ALGORITHM = "RSA";
+        private const string CHARSET = "UTF-8";
         private const int MAX_ENCRYPT_BLOCK = 117;
         private const int MAX_DECRYPT_BLOCK = 128;
-        private const string CHARSET = "UTF-8";
 
         /// <summary>
-        /// 私钥加密 - 完全按照Java的实现方式
+        /// 使用私钥加密数据
         /// </summary>
-        /// <param name="data">要加密的数据</param>
-        /// <param name="privateKey">Base64编码的私钥</param>
+        /// <param name="data">需要加密的字符串</param>
+        /// <param name="privateKeyString">私钥字符串(Base64编码)</param>
         /// <returns>加密后的Base64字符串</returns>
-        public static string EncryptByPrivateKey(string data, string privateKey)
+        public static string EncryptByPrivateKey(string data, string privateKeyString)
         {
             try
             {
-                // 准确模拟Java的URL编码方式
-                string urlEncodedData = Uri.EscapeDataString(data);
-
-                // 将URL编码后的数据转为字节数组
+                // URL编码数据
+                string urlEncodedData = HttpUtility.UrlEncode(data);
                 byte[] dataBytes = Encoding.UTF8.GetBytes(urlEncodedData);
 
-                // 从Base64字符串中加载私钥
-                AsymmetricKeyParameter privateKeyParam = GetPrivateKeyFromBase64(privateKey);
-
-                // 使用BouncyCastle提供的加密引擎进行加密
-                var cipher = CipherUtilities.GetCipher("RSA/ECB/PKCS1Padding");
-                cipher.Init(true, privateKeyParam);
-
-                // 分段加密处理
-                using (var outputStream = new MemoryStream())
+                // 加载私钥
+                RSA rsa = CreateRSAProviderFromPrivateKey(privateKeyString);
+                
+                // 分块加密
+                using (MemoryStream ms = new MemoryStream())
                 {
-                    int dataLength = dataBytes.Length;
-                    int offSet = 0;
+                    int bufferSize = MAX_ENCRYPT_BLOCK;
+                    int offset = 0;
+                    int inputLen = dataBytes.Length;
                     byte[] cache;
-                    int i = 0;
-
-                    // 对数据分段加密
-                    while (dataLength - offSet > 0)
+                    
+                    while (inputLen - offset > 0)
                     {
-                        if (dataLength - offSet > MAX_ENCRYPT_BLOCK)
+                        if (inputLen - offset > bufferSize)
                         {
-                            cache = cipher.DoFinal(dataBytes, offSet, MAX_ENCRYPT_BLOCK);
+                            cache = rsa.Encrypt(dataBytes.AsSpan(offset, bufferSize).ToArray(), RSAEncryptionPadding.Pkcs1);
                         }
                         else
                         {
-                            cache = cipher.DoFinal(dataBytes, offSet, dataLength - offSet);
+                            cache = rsa.Encrypt(dataBytes.AsSpan(offset, inputLen - offset).ToArray(), RSAEncryptionPadding.Pkcs1);
                         }
-                        outputStream.Write(cache, 0, cache.Length);
-                        i++;
-                        offSet = i * MAX_ENCRYPT_BLOCK;
+                        
+                        ms.Write(cache, 0, cache.Length);
+                        offset += bufferSize;
                     }
-
-                    // 将加密结果转为Base64字符串
-                    return Convert.ToBase64String(outputStream.ToArray());
+                    
+                    return Convert.ToBase64String(ms.ToArray());
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"加密失败：{ex.Message}");
-                return null;
+                throw new Exception("加密过程中发生错误", ex);
             }
         }
 
         /// <summary>
-        /// 私钥解密 - 完全按照Java的实现方式
+        /// 使用私钥解密数据
         /// </summary>
-        /// <param name="encryptedData">要解密的Base64编码数据</param>
-        /// <param name="privateKey">Base64编码的私钥</param>
-        /// <returns>解密后的字符串</returns>
-        public static string DecryptByPrivateKey(string encryptedData, string privateKey)
+        /// <param name="encryptedData">加密的Base64字符串</param>
+        /// <param name="privateKeyString">私钥字符串(Base64编码)</param>
+        /// <returns>解密后的原始字符串</returns>
+        public static string DecryptByPrivateKey(string encryptedData, string privateKeyString)
         {
             try
             {
-                Console.WriteLine("开始解密...");
-
-                // 从Base64字符串加载私钥
-                AsymmetricKeyParameter privateKeyParam = GetPrivateKeyFromBase64(privateKey);
-                Console.WriteLine("私钥加载成功");
-
-                // 将加密数据转换为字节数组
-                byte[] encryptedBytes = Convert.FromBase64String(encryptedData);
-                Console.WriteLine($"加密数据长度: {encryptedBytes.Length}");
-
-                // 使用BouncyCastle提供的解密引擎
-                var cipher = CipherUtilities.GetCipher("RSA/ECB/PKCS1Padding");
-                cipher.Init(false, privateKeyParam);
-                Console.WriteLine("解密引擎初始化成功");
-
-                // 分段解密处理
-                using (var outputStream = new MemoryStream())
+                byte[] dataBytes = Convert.FromBase64String(encryptedData);
+                
+                // 加载私钥
+                RSA rsa = CreateRSAProviderFromPrivateKey(privateKeyString);
+                
+                // 分块解密
+                using (MemoryStream ms = new MemoryStream())
                 {
-                    int dataLength = encryptedBytes.Length;
-                    int offSet = 0;
+                    int bufferSize = MAX_DECRYPT_BLOCK;
+                    int offset = 0;
+                    int inputLen = dataBytes.Length;
                     byte[] cache;
-                    int i = 0;
-
-                    // 对数据分段解密
-                    while (dataLength - offSet > 0)
+                    
+                    while (inputLen - offset > 0)
                     {
-                        try
+                        if (inputLen - offset > bufferSize)
                         {
-                            if (dataLength - offSet > MAX_DECRYPT_BLOCK)
-                            {
-                                cache = cipher.DoFinal(encryptedBytes, offSet, MAX_DECRYPT_BLOCK);
-                            }
-                            else
-                            {
-                                cache = cipher.DoFinal(encryptedBytes, offSet, dataLength - offSet);
-                            }
-                            outputStream.Write(cache, 0, cache.Length);
+                            cache = rsa.Decrypt(dataBytes.AsSpan(offset, bufferSize).ToArray(), RSAEncryptionPadding.Pkcs1);
                         }
-                        catch (Exception ex)
+                        else
                         {
-                            Console.WriteLine($"解密块失败：{ex.Message}");
-                            Console.WriteLine($"解密块偏移量: {offSet}");
-                            return null; // 处理解密块失败的情况
+                            cache = rsa.Decrypt(dataBytes.AsSpan(offset, inputLen - offset).ToArray(), RSAEncryptionPadding.Pkcs1);
                         }
-                        i++;
-                        offSet = i * MAX_DECRYPT_BLOCK;
+                        
+                        ms.Write(cache, 0, cache.Length);
+                        offset += bufferSize;
                     }
-
-                    // URL解码，与Java保持一致
-                    string outStr = Encoding.UTF8.GetString(outputStream.ToArray());
-                    Console.WriteLine("解密成功");
-                    return HttpUtility.UrlDecode(outStr, Encoding.GetEncoding(CHARSET));
+                    
+                    string result = Encoding.UTF8.GetString(ms.ToArray());
+                    return HttpUtility.UrlDecode(result);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"解密失败：{ex.Message}");
-                Console.WriteLine(ex.StackTrace);
-                return null;
+                throw new Exception("解密过程中发生错误", ex);
             }
         }
 
         /// <summary>
-        /// 从Base64字符串加载私钥
+        /// 从Base64编码的私钥字符串创建RSA对象
         /// </summary>
-        private static AsymmetricKeyParameter GetPrivateKeyFromBase64(string privateKey)
+        private static RSA CreateRSAProviderFromPrivateKey(string privateKeyString)
         {
-            // 直接解析私钥，与Java行为一致
-            byte[] keyBytes = Convert.FromBase64String(privateKey);
-            return PrivateKeyFactory.CreateKey(keyBytes);
+            byte[] privateKeyBytes = Convert.FromBase64String(privateKeyString);
+            
+            var rsa = RSA.Create();
+            
+            // 导入PKCS#8格式的私钥
+            rsa.ImportPkcs8PrivateKey(privateKeyBytes, out _);
+            
+            return rsa;
         }
     }
 }
