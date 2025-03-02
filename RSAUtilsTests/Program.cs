@@ -19,11 +19,14 @@ namespace RSAUtilsTests
                 string getParams = "departNos=BM0001&containsDeletedPerson=true&beginDate=2024-08-01&endDate=2024-08-15";
                 Console.WriteLine($"待加密GET参数：{getParams}");
                 
-                string encryptedGetParams = RSAUtils.EncryptByPrivateKey(getParams, privateKey);
+                string encryptedGetParams = RSAUtils.EncryptByPrivateKey2(getParams, privateKey);
                 Console.WriteLine($"加密后结果：{encryptedGetParams}");
                 Console.WriteLine($"最终GET请求：querySecret={Uri.EscapeDataString(encryptedGetParams)}");
 
-                // 解密示例
+                // 解密示例 注：目前无法解密RSAUtils.EncryptByPrivateKey(getParams, privateKey)的密文；
+                // RSAUtils.EncryptByPrivateKey2(getParams, privateKey)生成的密文可以解密；
+                // RSAUtils.EncryptByPrivateKey(getParams, privateKey)海康互联正确识别
+                // RSAUtils.EncryptByPrivateKey2(getParams, privateKey)海康互联无法识别，返回400011错误	无法识别的加密内容
                 Console.WriteLine("【解密示例】");
                 string decryptedGetParams = RSAUtils.DecryptByPrivateKey(encryptedGetParams, privateKey);
                 Console.WriteLine($"解密后结果：{decryptedGetParams}");
